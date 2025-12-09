@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户模型
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  posts     Post[]
+  orders    Order[]
+  cart      CartItem[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+// 用户会话模型 - 演示 Redis 会话管理
+model Session {
+  id        String   @id @default(uuid())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique @db.VarChar(500)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  ip        String?  @db.VarChar(45)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// 文章模型
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.VarChar(255)
+  content   String?  @db.Text
+  published Boolean  @default(false)
+  viewCount Int      @default(0) @map("view_count")
+  authorId  Int      @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([authorId])
+  @@index([published])
+  @@map("posts")
+}
+
+// 商品分类
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(100)
+  description String?   @db.Text
+  parentId    Int?      @map("parent_id")
+  parent      Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// 商品模型 - 演示缓存策略
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String      @db.VarChar(200)
+  description String?     @db.Text
+  price       Decimal     @db.Decimal(10, 2)
+  stock       Int         @default(0)
+  categoryId  Int?        @map("category_id")
+  category    Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status      ProductStatus @default(ACTIVE)
+  salesCount  Int         @default(0) @map("sales_count")
+  viewCount   Int         @default(0) @map("view_count")
+  images      String?     @db.Text // JSON 数组
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([salesCount])
+  @@map("products")
+}
+
+// 购物车项
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId Int      @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("cart_items")
+}
+
+// 订单模型 - 演示事务和分布式锁
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNo     String      @unique @map("order_no") @db.VarChar(32)
+  userId      Int         @map("user_id")
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
+  status      OrderStatus @default(PENDING)
+  address     String?     @db.Text
+  remark      String?     @db.Text
+  paidAt      DateTime?   @map("paid_at")
+  shippedAt   DateTime?   @map("shipped_at")
+  completedAt DateTime?   @map("completed_at")
+  cancelledAt DateTime?   @map("cancelled_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  items       OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// 订单项
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int      @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2) // 下单时的价格快照
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// 操作日志 - 演示批量写入
+model OperationLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  action    String   @db.VarChar(50)
+  target    String?  @db.VarChar(100)
+  targetId  String?  @map("target_id") @db.VarChar(50)
+  detail    String?  @db.Text
+  ip        String?  @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("operation_logs")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING     // 待支付
+  PAID        // 已支付
+  SHIPPED     // 已发货
+  COMPLETED   // 已完成
+  CANCELLED   // 已取消
+  REFUNDED    // 已退款
+}
