@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button, Input, PasswordInput, Separator, ToastProvider, Toast, useToast, GitHubIcon, GoogleIcon } from '@/components/ui'
+import { openOAuthPopup } from '@/lib/oauth'
 
 function SignUpForm() {
   const router = useRouter()
@@ -14,6 +15,22 @@ function SignUpForm() {
   const [loading, setLoading] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [oauthLoading, setOauthLoading] = useState<'github' | 'google' | null>(null)
+
+  const handleOAuth = async (provider: 'github' | 'google') => {
+    setOauthLoading(provider)
+    try {
+      const success = await openOAuthPopup(provider)
+      if (success) {
+        showToast({ type: 'success', title: 'Success', description: 'Account created successfully!' })
+        setTimeout(() => router.push('/'), 500)
+      }
+    } catch {
+      showToast({ type: 'error', title: 'Error', description: 'OAuth signup failed' })
+    } finally {
+      setOauthLoading(null)
+    }
+  }
 
   const handleSendCode = async () => {
     if (!email || countdown > 0) return
@@ -97,10 +114,22 @@ function SignUpForm() {
 
           {/* OAuth Buttons */}
           <div className="space-y-3 mb-6">
-            <Button variant="oauth" className="w-full" icon={<GitHubIcon className="w-5 h-5" />}>
+            <Button 
+              variant="oauth" 
+              className="w-full" 
+              icon={<GitHubIcon className="w-5 h-5" />}
+              onClick={() => handleOAuth('github')}
+              loading={oauthLoading === 'github'}
+              disabled={oauthLoading !== null}
+            >
               GitHub
             </Button>
-            <Button variant="oauth" className="w-full" icon={<GoogleIcon className="w-5 h-5" />}>
+            <Button 
+              variant="oauth" 
+              className="w-full" 
+              icon={<GoogleIcon className="w-5 h-5" />}
+              disabled={oauthLoading !== null}
+            >
               Google
             </Button>
           </div>

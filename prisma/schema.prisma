@@ -9,18 +9,22 @@ datasource db {
 
 // 用户模型
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  password  String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  posts     Post[]
-  orders    Order[]
-  cart      CartItem[]
-  sessions  Session[]
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  name          String?
+  password      String   @default("")
+  avatar        String?  @db.VarChar(500)
+  provider      String?  @db.VarChar(20) // github, google, email
+  providerId    String?  @map("provider_id") @db.VarChar(100)
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  posts         Post[]
+  orders        Order[]
+  cart          CartItem[]
+  sessions      Session[]
 
+  @@unique([provider, providerId])
   @@map("users")
 }
 

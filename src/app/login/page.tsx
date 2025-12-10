@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button, Input, PasswordInput, Separator, ToastProvider, Toast, useToast, GitHubIcon, GoogleIcon } from '@/components/ui'
+import { openOAuthPopup } from '@/lib/oauth'
 
 function LoginForm() {
   const router = useRouter()
@@ -11,6 +12,22 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [oauthLoading, setOauthLoading] = useState<'github' | 'google' | null>(null)
+
+  const handleOAuth = async (provider: 'github' | 'google') => {
+    setOauthLoading(provider)
+    try {
+      const success = await openOAuthPopup(provider)
+      if (success) {
+        showToast({ type: 'success', title: 'Success', description: 'Login successful!' })
+        setTimeout(() => router.push('/'), 500)
+      }
+    } catch {
+      showToast({ type: 'error', title: 'Error', description: 'OAuth login failed' })
+    } finally {
+      setOauthLoading(null)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,10 +69,22 @@ function LoginForm() {
 
           {/* OAuth Buttons */}
           <div className="space-y-3 mb-6">
-            <Button variant="oauth" className="w-full" icon={<GitHubIcon className="w-5 h-5" />}>
+            <Button 
+              variant="oauth" 
+              className="w-full" 
+              icon={<GitHubIcon className="w-5 h-5" />}
+              onClick={() => handleOAuth('github')}
+              loading={oauthLoading === 'github'}
+              disabled={oauthLoading !== null}
+            >
               GitHub
             </Button>
-            <Button variant="oauth" className="w-full" icon={<GoogleIcon className="w-5 h-5" />}>
+            <Button 
+              variant="oauth" 
+              className="w-full" 
+              icon={<GoogleIcon className="w-5 h-5" />}
+              disabled={oauthLoading !== null}
+            >
               Google
             </Button>
           </div>
