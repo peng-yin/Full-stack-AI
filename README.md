@@ -1,6 +1,6 @@
 # Backend AI
 
-MySQL + Redis 学习项目，基于 Next.js + Prisma + ioredis。
+基于 Next.js + Prisma + ioredis。
 
 ## 快速开始
 
