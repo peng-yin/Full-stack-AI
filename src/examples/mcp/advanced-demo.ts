@@ -10,12 +10,6 @@ import { z } from 'zod';
 const server = new McpServer({
   name: 'advanced-mcp-demo',
   version: '1.0.0',
-  capabilities: {
-    tools: {},
-    resources: {},
-    prompts: {},  // MCP 独有：提示词模板
-    logging: {}   // MCP 独有：日志记录
-  }
 });
 
 // ============ MCP 独有特性 1: 动态工具发现 ============

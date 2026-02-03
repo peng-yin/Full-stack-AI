@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createSession } from '@/lib/auth'
 
+// 强制动态渲染（使用 searchParams）
+export const dynamic = 'force-dynamic'
+
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!
 const APP_URL = process.env.APP_URL || 'http://localhost:3008'

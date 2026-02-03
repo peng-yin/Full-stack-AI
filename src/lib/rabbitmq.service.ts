@@ -7,10 +7,10 @@
  * - Redis: 轻量级，适合简单场景，已有 Redis 时零成本
  */
 
-import amqplib, { Connection, Channel, ConsumeMessage } from 'amqplib'
+import amqplib, { Channel, ConsumeMessage } from 'amqplib'
 
 export class RabbitMQService {
-  private connection: Connection | null = null
+  private connection: any = null
   private channel: Channel | null = null
   private url: string
 
@@ -30,7 +30,7 @@ export class RabbitMQService {
     this.channel = await this.connection.createChannel()
 
     // 连接错误处理
-    this.connection.on('error', (err) => {
+    this.connection.on('error', (err: Error) => {
       console.error('RabbitMQ connection error:', err)
       this.connection = null
       this.channel = null

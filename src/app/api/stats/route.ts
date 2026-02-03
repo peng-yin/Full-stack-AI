@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { redisUtils } from '@/lib/redis'
 
+// 强制动态渲染（使用 searchParams）
+export const dynamic = 'force-dynamic'
+
 // GET /api/stats - 获取统计数据
 // 演示：计数器、日期统计、实时数据
 export async function GET(request: NextRequest) {

@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       data: {
         id,
-        newScore: parseFloat(newScore),
+        newScore: newScore,
         rank: rank !== null ? rank + 1 : null,
       },
     })

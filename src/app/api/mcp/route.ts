@@ -35,7 +35,7 @@ async function getMcpClient(): Promise<Client> {
 
     const transport = new StdioClientTransport({
       command: 'npx',
-      args: ['tsx', path.join(process.cwd(), 'src/mcp/server.ts')],
+      args: ['tsx', path.join(process.cwd(), 'src/examples/mcp/server.ts')],
       env: {
         ...process.env,
         NODE_ENV: 'development'

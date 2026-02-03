@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { redisUtils } from '@/lib/redis'
 
+// 强制动态渲染（使用 searchParams）
+export const dynamic = 'force-dynamic'
+
 const HOT_PRODUCTS_KEY = 'products:hot'
 const CACHE_TTL = 60 // 1分钟
 

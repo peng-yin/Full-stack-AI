@@ -1,6 +1,6 @@
 # Backend AI
 
-基于 Next.js + Prisma + ioredis。
+AI Agent全栈项目，基于 Next.js + Prisma + ioredis + MYSQL + RabbitMQ。
 
 ## 快速开始
 
@@ -11,7 +11,10 @@ pnpm docker:up
 # 2. 同步数据库表
 pnpm db:push
 
-# 3. 启动开发服务
+# 3. 复制环境变量, 编辑 .env.local 填入真实值
+cp .env.example .env.local
+
+# 4. 启动开发服务
 pnpm dev
 ```
 

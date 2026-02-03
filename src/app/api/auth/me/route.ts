@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifySession } from '@/lib/auth'
 
+// 强制动态渲染（使用 cookies）
+export const dynamic = 'force-dynamic'
+
 // GET /api/auth/me - 获取当前用户信息
 export async function GET(request: NextRequest) {
   try {

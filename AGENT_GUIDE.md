@@ -1,16 +1,664 @@
-# Agent 全面指南
+# Agent 架构与实现指南
 
-构建企业级 AI Agent 的完整参考。
+> **企业级 AI Agent 系统**，基于 OpenRouter + ToolRegistry + RAG + Memory 构建
 
-## 目录
+## 📚 目录
 
-1. [Agent 基础概念](#1-agent-基础概念)
-2. [Agent 类型详解](#2-agent-类型详解)
-3. [工具系统](#3-工具系统)
-4. [Agent 编排](#4-agent-编排)
-5. [状态管理](#5-状态管理)
-6. [实战示例](#6-实战示例)
-7. [最佳实践](#7-最佳实践)
+1. [系统架构](#1-系统架构)
+2. [核心模块](#2-核心模块)
+3. [Agent 工作流程](#3-agent-工作流程)
+4. [工具系统](#4-工具系统)
+5. [RAG 知识库](#5-rag-知识库)
+6. [记忆管理](#6-记忆管理)
+7. [扩展开发](#7-扩展开发)
+8. [最佳实践](#8-最佳实践)
+
+---
+
+## 1. 系统架构
+
+### 1.1 整体架构图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Agent 系统                            │
+├─────────────────────────────────────────────────────────┤
+│  用户输入                                                │
+│     ↓                                                    │
+│  ┌──────────────────────────────────────┐               │
+│  │ Agent Core (agent.ts)                │               │
+│  │ - 对话管理                            │               │
+│  │ - 工具调用循环                         │               │
+│  │ - SSE 流式响应                         │               │
+│  └──────────┬───────────────────────────┘               │
+│             │                                            │
+│    ┌────────┼────────┬──────────┐                       │
+│    ↓        ↓        ↓          ↓                       │
+│  ┌────┐  ┌────┐  ┌─────┐   ┌──────┐                    │
+│  │Tool│  │RAG │  │Memory│  │Prompt│                    │
+│  │注册│  │检索│  │ 摘要 │  │ 构建 │                    │
+│  └────┘  └────┘  └─────┘   └──────┘                    │
+│    ↓        ↓        ↓          ↓                       │
+│  ┌─────────────────────────────────┐                    │
+│  │  LLM (OpenRouter)               │                    │
+│  └─────────────────────────────────┘                    │
+│                 ↓                                        │
+│           工具执行 + 结果返回                             │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 1.2 文件结构
+
+```
+src/lib/agent/
+├── agent.ts              # ⭐ Agent 核心流程
+├── config.ts             # 配置管理
+├── core.ts               # 核心组件 (OpenAI, Redis, Schema)
+├── utils.ts              # 工具函数 (Logger, ID, Constants)
+├── types.ts              # 类型定义
+├── mcp.ts                # 工具注册和调用
+├── tool-registry.ts      # 工具注册表
+├── tool-validator.ts     # 工具验证
+├── tool-extensions.example.ts  # 扩展示例
+├── rag.ts                # RAG 检索
+├── memory.ts             # 记忆管理
+├── prompt.ts             # Prompt 构建
+├── sse.ts                # SSE 流式响应
+└── index.ts              # 导出汇总
+```
+
+**优化说明**：
+- ✅ 合并了 `crypto.ts` + `logger.ts` + `constants.ts` → `utils.ts`
+- ✅ 合并了 `openai.ts` + `redis.ts` + `schema.ts` → `core.ts`
+- ✅ 从 18 个文件精简到 12 个文件
+- ✅ 职责更清晰，减少循环依赖
+
+---
+
+## 2. 核心模块
+
+### 2.1 agent.ts - Agent 核心
+
+**职责**: 管理对话流程、工具调用循环、错误处理
+
+**关键函数**:
+
+```typescript
+// 主入口：流式响应
+export const streamAgentResponse = async (input: AgentInput)
+
+// 构建消息上下文
+const buildMessages = async ({ conversationId, userMessage, topK })
+
+// 工具调用循环（优化版）
+const streamCompletion = async ({ controller, messages, conversationId, userMessage })
+```
+
+**工作流程**:
+1. 接收用户输入
+2. 加载对话历史 + 摘要
+3. RAG 检索相关文档
+4. 构建系统 Prompt
+5. 调用 LLM 生成响应
+6. 处理工具调用（最多 5 轮循环）
+7. 返回结果并保存对话
+
+**优化点**:
+- ✅ 改进循环控制逻辑，避免 `shouldContinue` 标志位混乱
+- ✅ 增加最大循环警告，防止无限循环
+- ✅ 使用 `logger` 替换 `console.log`
+
+---
+
+### 2.2 tool-registry.ts - 工具注册表
+
+**职责**: 统一管理所有工具，支持动态注册和验证
+
+**核心类**:
+
+```typescript
+class ToolRegistry {
+  // 注册工具
+  register(metadata: ToolMetadata): void
+  
+  // 执行工具
+  async execute(name: string, args: unknown): Promise<unknown>
+  
+  // 转换为 OpenAI 格式
+  toOpenAITools(): OpenAITool[]
+  
+  // 获取工具信息
+  getTool(name: string): ToolMetadata | undefined
+  listToolNames(): string[]
+  requiresConfirmation(name: string): boolean
+}
+```
+
+**内置工具** (在 `mcp.ts` 中注册):
+- `ping` - 测试连接
+- `get_current_time` - 获取当前时间
+- `search_docs` - 搜索知识库
+- `calculate` - 数学计算
+- `delete_file` - 删除文件（需确认）
+
+---
+
+### 2.3 rag.ts - RAG 检索
+
+**职责**: 文档上传、Embedding、语义检索
+
+**核心函数**:
+
+```typescript
+// 上传文档
+export const upsertDocument = async ({
+  sourceId, title, content, metadata
+}): Promise<{ chunkCount, chunkIds }>
+
+// 语义检索
+export const search = async ({
+  query, topK, scoreThreshold
+}): Promise<RagChunk[]>
+
+// 删除文档
+export const removeBySource = async (sourceId: string)
+```
+
+**优化特性**:
+- ✅ **两层缓存**: Redis (1小时) + 内存 (可配置)
+- ✅ **提前过滤**: 在排序前过滤低分文档，减少计算量
+- ✅ **性能日志**: 记录检索耗时和命中率
+
+---
+
+### 2.4 memory.ts - 记忆管理
+
+**职责**: 对话历史管理、智能摘要
+
+**核心函数**:
+
+```typescript
+// 获取历史消息
+export const getMessages = async (conversationId: string)
+
+// 获取摘要（合并历史摘要）
+export const getSummary = async (conversationId: string)
+
+// 添加消息并自动摘要
+export const appendAndMaybeSummarize = async (
+  conversationId: string,
+  message: CompletionMessage
+)
+```
+
+**优化特性**:
+- ✅ **Token 感知**: 基于 token 数量触发摘要，而非固定消息数
+- ✅ **增量摘要**: 保留历史摘要上下文，避免信息丢失
+- ✅ **保留最近消息**: 摘要后保留最近 N 条消息（可配置）
+
+---
+
+## 3. Agent 工作流程
+
+### 3.1 单次对话流程
+
+```mermaid
+graph TD
+    A[用户输入] --> B{检查是否确认消息}
+    B -->|是| C[执行待确认工具]
+    B -->|否| D[加载历史+摘要]
+    D --> E[RAG检索]
+    E --> F[构建Prompt]
+    F --> G[调用LLM]
+    G --> H{是否有工具调用}
+    H -->|否| I[返回响应]
+    H -->|是| J{是否需要确认}
+    J -->|是| K[发送确认请求]
+    J -->|否| L[执行工具]
+    L --> M{循环<5次?}
+    M -->|是| G
+    M -->|否| N[强制终止+提示]
+    I --> O[保存对话]
+    K --> O
+    N --> O
+```
+
+### 3.2 工具调用循环
+
+**优化前**:
+```typescript
+while (shouldContinue && loopCount < 5) {
+  loopCount++
+  shouldContinue = false
+  // ... 工具调用
+  shouldContinue = true  // 混乱的标志位
+}
+```
+
+**优化后**:
+```typescript
+const maxLoops = 5
+while (loopCount < maxLoops) {
+  loopCount++
+  const isLastLoop = loopCount >= maxLoops
+  
+  // ... LLM 调用
+  
+  // 无工具调用，直接退出
+  if (toolCalls.size === 0) return
+  
+  // 处理工具调用
+  let needsContinue = false
+  for (const call of toolCallArray) {
+    // ...
+    needsContinue = true
+  }
+  
+  // 达到最大循环，强制终止
+  if (isLastLoop && needsContinue) {
+    logger.warn('达到最大循环次数')
+    return
+  }
+  
+  // 不需要继续，退出
+  if (!needsContinue) return
+}
+```
+
+---
+
+## 4. 工具系统
+
+### 4.1 工具定义
+
+使用 Zod 定义工具参数：
+
+```typescript
+import { z } from 'zod'
+import { toolRegistry } from './tool-registry'
+
+toolRegistry.register({
+  name: 'search_docs',
+  description: '在知识库中进行语义检索',
+  category: 'knowledge',
+  requiresConfirmation: false,
+  parameters: z.object({
+    query: z.string().describe('搜索查询文本'),
+    topK: z.number().int().positive().optional().describe('返回结果数量'),
+  }),
+  execute: async ({ query, topK }) => {
+    const results = await ragSearch({ query, topK })
+    return { success: true, data: results }
+  },
+})
+```
+
+### 4.2 扩展自定义工具
+
+参考 `tool-extensions.example.ts`:
+
+```typescript
+// 1. 天气查询工具
+toolRegistry.register({
+  name: 'get_weather',
+  description: '获取指定城市的天气信息',
+  category: 'external',
+  parameters: z.object({
+    city: z.string().describe('城市名称，如"北京"、"上海"'),
+  }),
+  execute: async ({ city }) => {
+    // 调用天气 API
+    const weather = await weatherApi.get(city)
+    return { success: true, data: weather }
+  },
+})
+
+// 2. 数据库查询工具
+toolRegistry.register({
+  name: 'query_database',
+  description: '执行 SQL 查询',
+  category: 'dangerous',
+  requiresConfirmation: true,
+  parameters: z.object({
+    sql: z.string().describe('SQL 查询语句'),
+  }),
+  execute: async ({ sql }) => {
+    const result = await db.query(sql)
+    return { success: true, data: result }
+  },
+})
+```
+
+### 4.3 工具分类
+
+| 分类 | 说明 | 示例 |
+|------|------|------|
+| `system` | 系统工具 | ping, get_current_time |
+| `knowledge` | 知识库工具 | search_docs |
+| `external` | 外部 API | get_weather |
+| `dangerous` | 危险操作 | delete_file, query_database |
+
+---
+
+## 5. RAG 知识库
+
+### 5.1 上传文档
+
+```typescript
+import { upsertDocument } from '@/lib/agent'
+
+await upsertDocument({
+  sourceId: 'doc-001',
+  title: '产品手册',
+  content: '这是产品的详细说明...',
+  metadata: { author: 'admin', version: 'v1.0' },
+})
+```
+
+### 5.2 检索文档
+
+```typescript
+import { search } from '@/lib/agent'
+
+const chunks = await search({
+  query: '如何重置密码',
+  topK: 5,
+  scoreThreshold: 0.3,
+})
+
+chunks.forEach(chunk => {
+  console.log(`相关度: ${chunk.score}`)
+  console.log(chunk.content)
+})
+```
+
+### 5.3 性能优化
+
+**Embedding 缓存**:
+```typescript
+// Redis 缓存 (1 小时)
+const cacheKey = `kb:emb-cache:${hashText(text)}`
+const cached = await redis.get(cacheKey)
+if (cached) return JSON.parse(cached)
+
+// 生成 embedding
+const embedding = await openaiClient.embeddings.generate(...)
+await redis.setex(cacheKey, 3600, JSON.stringify(embedding))
+```
+
+**内存缓存**:
+```typescript
+let chunksCache: RagChunk[] | null = null
+let chunksCacheTimestamp = 0
+
+const listChunks = async () => {
+  const now = Date.now()
+  if (chunksCache && now - chunksCacheTimestamp < cacheTTL) {
+    return chunksCache  // 命中缓存
+  }
+  // 从 Redis 加载
+  chunksCache = await loadFromRedis()
+  chunksCacheTimestamp = now
+  return chunksCache
+}
+```
+
+---
+
+## 6. 记忆管理
+
+### 6.1 Token 感知摘要
+
+```typescript
+// 估算 token 数量
+const estimateTokens = (message: CompletionMessage): number => {
+  const content = message.content || ''
+  const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length
+  const englishWords = content.split(/\s+/).length
+  return Math.ceil(chineseChars * 1.5 + englishWords * 1.3)
+}
+
+// 判断是否需要摘要
+const shouldSummarize = (messages: CompletionMessage[]) => {
+  const totalTokens = getTotalTokens(messages)
+  return totalTokens > config.memorySummaryMaxTokens  // 默认 3000
+}
+```
+
+### 6.2 增量摘要
+
+```typescript
+// 摘要时保留历史
+if (oldSummary) {
+  await redis.rpush(summaryHistoryKey(conversationId), oldSummary)
+  await redis.ltrim(summaryHistoryKey(conversationId), -3, -1)  // 保留最近 3 个
+}
+
+// 获取摘要时合并历史
+export const getSummary = async (conversationId: string) => {
+  const currentSummary = await redis.get(summaryKey(conversationId))
+  const history = await redis.lrange(summaryHistoryKey(conversationId), 0, -1)
+  
+  if (history.length === 0) return currentSummary
+  
+  return `【历史摘要】\n${history.join('\n\n')}\n\n【最近摘要】\n${currentSummary}`
+}
+```
+
+---
+
+## 7. 扩展开发
+
+### 7.1 添加新工具
+
+1. 在 `mcp.ts` 或独立文件中注册：
+
+```typescript
+import { toolRegistry } from './tool-registry'
+import { z } from 'zod'
+
+toolRegistry.register({
+  name: 'send_email',
+  description: '发送邮件',
+  category: 'external',
+  parameters: z.object({
+    to: z.string().email().describe('收件人邮箱'),
+    subject: z.string().describe('邮件主题'),
+    body: z.string().describe('邮件正文'),
+  }),
+  execute: async ({ to, subject, body }) => {
+    await emailService.send(to, subject, body)
+    return { success: true, messageId: 'msg-123' }
+  },
+})
+```
+
+2. 工具会自动出现在 Prompt 中，LLM 可直接调用
+
+### 7.2 集成外部 MCP Server
+
+```typescript
+// tool-extensions.ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+
+const mcpClient = new Client({
+  name: 'my-app',
+  version: '1.0.0',
+})
+
+await mcpClient.connect(transport)
+
+// 包装 MCP 工具
+const mcpTools = await mcpClient.listTools()
+mcpTools.tools.forEach(tool => {
+  toolRegistry.register({
+    name: `mcp_${tool.name}`,
+    description: tool.description,
+    category: 'external',
+    parameters: z.object(tool.inputSchema.properties),
+    execute: async (args) => {
+      return await mcpClient.callTool({ name: tool.name, arguments: args })
+    },
+  })
+})
+```
+
+---
+
+## 8. 最佳实践
+
+### 8.1 Prompt 设计
+
+```typescript
+// ❌ 不好的 Prompt
+const badPrompt = '你是一个助手'
+
+// ✅ 好的 Prompt
+const goodPrompt = `你是企业级AI助手。
+
+## 工作原则
+1. 必要时调用工具，不要编造事实
+2. 优先使用知识库中的信息
+3. 不确定时明确告知用户
+
+## 输出格式
+- 使用中文
+- 结构化输出
+- 引用来源`
+```
+
+### 8.2 工具设计原则
+
+1. **单一职责**: 一个工具只做一件事
+2. **清晰描述**: LLM 能理解何时使用
+3. **参数验证**: 使用 Zod Schema
+4. **错误处理**: 返回结构化错误
+
+```typescript
+// ✅ 好的工具设计
+toolRegistry.register({
+  name: 'get_user_info',  // 清晰的名称
+  description: '根据用户ID获取用户基本信息（姓名、邮箱、角色）',  // 详细描述
+  category: 'system',
+  parameters: z.object({
+    userId: z.string().describe('用户唯一标识符'),
+  }),
+  execute: async ({ userId }) => {
+    try {
+      const user = await userService.getById(userId)
+      if (!user) {
+        return { success: false, message: '用户不存在' }
+      }
+      return { success: true, data: { name: user.name, email: user.email } }
+    } catch (error) {
+      return { success: false, message: error.message }
+    }
+  },
+})
+```
+
+### 8.3 性能优化
+
+1. **缓存策略**
+   - Embedding 缓存：1 小时
+   - 文档列表缓存：60 秒（可配置）
+   
+2. **并发控制**
+   - 工具调用串行执行（避免冲突）
+   - RAG 检索并行（多查询）
+
+3. **资源限制**
+   - 最大循环次数：5 次
+   - 上下文窗口：3000 tokens 触发摘要
+   - 保留消息数：最近 5 条
+
+### 8.4 监控和日志
+
+```typescript
+// 使用结构化日志
+logger.info('RAG 检索完成', {
+  query: query.slice(0, 50),
+  totalChunks: chunks.length,
+  matchedCount: scored.length,
+  topScore: scored[0]?.score,
+})
+
+logger.warn('达到最大循环次数', { loopCount })
+
+logger.error('工具执行失败', { toolName, error: error.message })
+```
+
+---
+
+## 配置参考
+
+所有配置项在 `.env` 中：
+
+```bash
+# OpenRouter 配置
+OPENROUTER_API_KEY=your_api_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=gpt-4o-mini
+EMBEDDING_MODEL=text-embedding-3-small
+
+# RAG 配置
+RAG_ENABLED=true
+RAG_TOP_K=4
+RAG_SCORE_THRESHOLD=0.1
+RAG_CACHE_TTL_MS=60000
+
+# Memory 配置
+MEMORY_MAX_MESSAGES=30
+MEMORY_SUMMARY_EVERY=12
+MEMORY_SUMMARY_MAX_TOKENS=3000
+MEMORY_KEEP_RECENT_COUNT=5
+
+# MCP 配置
+MCP_CONFIRM_REQUIRED=true
+
+# SSE 配置
+SSE_HEARTBEAT_MS=15000
+```
+
+---
+
+## API 使用示例
+
+```bash
+# 发送对话
+curl -X POST http://localhost:3008/api/ai/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversation_id": "test-session",
+    "message": "搜索关于密码重置的文档",
+    "top_k": 5
+  }'
+
+# 列出可用工具
+curl http://localhost:3008/api/ai/agent/tools
+
+# 上传文档
+curl -X POST http://localhost:3008/api/ai/knowledge/upload \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceId": "doc-001",
+    "title": "产品手册",
+    "content": "..."
+  }'
+```
+
+---
+
+## 推荐资源
+
+- [OpenRouter 文档](https://openrouter.ai/docs)
+- [MCP Protocol](https://modelcontextprotocol.io)
+- [Zod 文档](https://zod.dev)
+- [LangChain Agents](https://python.langchain.com/docs/modules/agents/)
+
+---
+
+**最后更新**: 2026-02-03
 
 ---
 
