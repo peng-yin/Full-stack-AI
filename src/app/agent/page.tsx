@@ -30,7 +30,7 @@ const tryParseJson = (s: string) => {
   }
 }
 
-export default function AgentDemoPage() {
+export default function AgentPage() {
   const [input, setInput] = useState('你有哪些工具？请调用 ping 工具测试一下')
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [streaming, setStreaming] = useState(false)
