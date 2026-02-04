@@ -1,7 +1,7 @@
 /**
- * MCP Server 示例
+ * MCP Server 实现
  * 
- * 这个文件演示如何创建一个 MCP Server，提供工具给 AI 调用
+ * 提供工具给 AI 调用
  * MCP (Model Context Protocol) 是一个标准化协议，让 AI 应用能够连接各种数据源和工具
  */
 
@@ -23,7 +23,6 @@ const server = new McpServer({
 
 /**
  * 工具 1: 获取当前时间
- * 这是最简单的工具示例
  */
 server.tool(
   'get-current-time',
@@ -48,7 +47,6 @@ server.tool(
 
 /**
  * 工具 2: 计算器
- * 演示带参数的工具
  */
 server.tool(
   'calculator',
@@ -98,7 +96,6 @@ server.tool(
 
 /**
  * 工具 3: 天气查询（模拟）
- * 演示异步数据获取
  */
 server.tool(
   'get-weather',
@@ -130,7 +127,6 @@ server.tool(
 
 /**
  * 工具 4: 数据库查询（模拟）
- * 演示复杂的业务逻辑
  */
 server.tool(
   'query-users',

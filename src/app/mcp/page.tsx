@@ -254,7 +254,7 @@ export default function McpDemoPage() {
                 定义和暴露工具、资源、提示词。可以是本地进程或远程服务。
               </p>
               <code className="text-xs text-green-400 block mt-2">
-                src/examples/mcp/server.ts
+                src/lib/mcp/server.ts
               </code>
             </div>
             <div>
@@ -263,7 +263,7 @@ export default function McpDemoPage() {
                 连接到 Server，发现并调用工具。通常由 AI 应用使用。
               </p>
               <code className="text-xs text-green-400 block mt-2">
-                src/examples/mcp/client.ts
+                src/lib/mcp/client.ts
               </code>
             </div>
             <div>

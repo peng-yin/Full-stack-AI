@@ -16,9 +16,7 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "mcp:server": "npx tsx src/examples/mcp/server.ts",
-    "mcp:client": "npx tsx src/examples/mcp/client.ts",
-    "mcp:http": "npx tsx src/examples/mcp/http-server.ts"
+    "mcp:server": "npx tsx src/lib/mcp/server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
