@@ -148,6 +148,37 @@ export default function Home() {
             </div>
           </div>
 
+          {/* 工作流引擎 */}
+          <div className="bg-gray-100 p-6 rounded-lg">
+            <h2 className="font-semibold mb-4 text-lg">🔄 工作流引擎</h2>
+            <div className="space-y-2 text-sm">
+              <p><code className="bg-gray-200 px-2 py-1 rounded">GET /api/orders/workflow</code> - 流程定义</p>
+              <p><code className="bg-gray-200 px-2 py-1 rounded">POST /api/orders/workflow</code> - 启动工作流</p>
+              <p><code className="bg-gray-200 px-2 py-1 rounded">PUT /api/orders/workflow</code> - 发送事件</p>
+              <p className="mt-3">
+                <a href="/workflow" className="inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                  打开工作流控制台 →
+                </a>
+              </p>
+            </div>
+          </div>
+
+          {/* 数据库操作实战 */}
+          <div className="bg-gray-100 p-6 rounded-lg">
+            <h2 className="font-semibold mb-4 text-lg">🗄️ 数据库操作实战</h2>
+            <div className="space-y-2 text-sm">
+              <p><code className="bg-gray-200 px-2 py-1 rounded">POST /api/db-practice/batch</code> - 批量操作</p>
+              <p><code className="bg-gray-200 px-2 py-1 rounded">POST /api/db-practice/relations</code> - 关联关系</p>
+              <p><code className="bg-gray-200 px-2 py-1 rounded">POST /api/db-practice/advanced-query</code> - 高级查询</p>
+              <p><code className="bg-gray-200 px-2 py-1 rounded">POST /api/db-practice/transaction</code> - 事务并发</p>
+              <p className="mt-3">
+                <a href="/db-practice" className="inline-block px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
+                  打开数据库实战控制台 →
+                </a>
+              </p>
+            </div>
+          </div>
+
           {/* 系统 */}
           <div className="bg-gray-100 p-6 rounded-lg">
             <h2 className="font-semibold mb-4 text-lg">⚙️ 系统</h2>

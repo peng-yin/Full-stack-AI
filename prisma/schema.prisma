@@ -90,15 +90,42 @@ model Product {
   salesCount  Int         @default(0) @map("sales_count")
   viewCount   Int         @default(0) @map("view_count")
   images      String?     @db.Text // JSON 数组
+  version     Int         @default(1) // 乐观锁版本号
+  deletedAt   DateTime?   @map("deleted_at") // 软删除
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   orderItems  OrderItem[]
   cartItems   CartItem[]
+  tags        ProductTag[]
 
   @@index([categoryId])
   @@index([status])
   @@index([salesCount])
+  @@index([deletedAt])
   @@map("products")
+}
+
+// 标签模型 - 演示多对多关系
+model Tag {
+  id        Int          @id @default(autoincrement())
+  name      String       @unique @db.VarChar(50)
+  color     String?      @db.VarChar(20)
+  createdAt DateTime     @default(now()) @map("created_at")
+  products  ProductTag[]
+
+  @@map("tags")
+}
+
+// 商品-标签关联表 - 显式多对多
+model ProductTag {
+  productId Int      @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tagId     Int      @map("tag_id")
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([productId, tagId])
+  @@map("product_tags")
 }
 
 // 购物车项

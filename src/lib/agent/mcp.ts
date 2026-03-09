@@ -123,6 +123,10 @@ function registerBuiltinTools() {
 // 初始化内置工具
 registerBuiltinTools()
 
+// 注册工作流相关工具
+import { registerWorkflowTools } from '../workflow/workflow-tools'
+registerWorkflowTools()
+
 export const listTools = () => toolRegistry.listToolNames()
 
 const createPendingCall = async ({ conversationId, toolName, args }: { conversationId: string; toolName: string; args: any }) => {
